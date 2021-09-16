@@ -29,10 +29,12 @@ export interface MailData {
 export interface MailgunData extends MailData {
   apiKey: string
   domain: string
+  username?: string
 }
 
 export interface SendgridData extends MailData {
   apiKey: string
+  sender: string
 }
 
 export interface SMTPData extends MailData {
@@ -44,17 +46,11 @@ export interface SMTPData extends MailData {
 
 export interface TeamsData {
   url: string
-  body: TeamsDataBody
-}
-
-export interface TeamsDataBody extends WebhookDataBody {
-  status: string
-  expected?: string
 }
 
 export interface WebhookData {
   url: string
-  body: WebhookDataBody
+  body: string
 }
 
 export interface MonikaNotifData {
@@ -62,20 +58,39 @@ export interface MonikaNotifData {
   body: MonikaNotifDataBody
 }
 
-export interface MonikaNotifDataBody {
-  type: 'start' | 'incident' | 'recovery' | 'termination'
-  probe_url: string
-  probe_name?: string
-  monika_id?: string
-  ip_address: string
-  response_time: string
+export type MonikaNotifDataBody =
+  | MonikaAlertNotifDataBody
+  | MonikaStartAndTerminationNotifDataBody
+  | MonikaStatusUpdateNotifDataBody
+
+interface MonikaAlertNotifDataBody {
+  type: 'incident' | 'recovery'
   alert: string
+  url: string
+  time: string
+  monika: string
+}
+
+interface MonikaStartAndTerminationNotifDataBody {
+  type: 'start' | 'termination'
+  ip_address: string
+}
+
+interface MonikaStatusUpdateNotifDataBody {
+  type: 'status-update'
+  time: string
+  monika: string
+  numberOfProbes: string
+  averageResponseTime: string
+  numberOfIncidents: string
+  numberOfRecoveries: string
+  numberOfSentNotifications: string
 }
 
 export interface TelegramData {
   group_id: string
   bot_token: string
-  body: WebhookDataBody
+  body: string
 }
 
 export interface WebhookDataBody {
@@ -90,38 +105,8 @@ export interface WhatsappData extends MailData {
   password: string
 }
 
-export interface DiscordData {
-  url: string
-  body: DiscordDataBody
-}
-
-export interface DiscordDataBody {
-  url: string
-  time: string
-  alert: string
-}
-
 export interface WorkplaceData {
   thread_id: string
   access_token: string
-  body: WorkplaceDataBody
-}
-
-export interface WorkplaceDataBody {
-  url: string
-  time: string
-  alert: string
-}
-
-export interface DesktopData {
-  url: string
-  body: DesktopDataBody
-}
-
-export interface DesktopDataBody {
-  url: string
-  time: string
-  alert: string
-  status: string
-  expected?: string
+  body: string
 }

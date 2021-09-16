@@ -22,17 +22,68 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { AxiosResponseWithExtraData } from '../../../interfaces/request'
+import { expect } from '@oclif/test'
+import { checkTLS } from '../tls-checker'
 
-// Check if response time is greater than specified value in milliseconds
-const resTimeGreaterThanX = (
-  res: AxiosResponseWithExtraData,
-  minResTime: number
-) => {
-  const resTime = res.config.extraData?.responseTime ?? 0
-  const isGreaterThan = resTime > minResTime
+describe('TLS Checker', () => {
+  describe('fail attempt', () => {
+    it('should check expired domain', async () => {
+      // arrange
+      const url = 'expired.badssl.com'
 
-  return isGreaterThan
-}
+      try {
+        // act
+        await checkTLS(url)
+      } catch (error) {
+        // assert
+        expect(error.message).to.include(
+          `${url} security certificate has expired at`
+        )
+      }
+    })
 
-export default resTimeGreaterThanX
+    it('tests example.com with long cert expiry threshold', async () => {
+      // arrange
+      const url = 'example.com'
+
+      try {
+        // act
+        await checkTLS(url)
+      } catch (error) {
+        // assert
+        expect(error.message).to.include(
+          `${url} security certificate will expire at`
+        )
+      }
+    })
+  })
+
+  describe('success attempt', () => {
+    it('tests example.com', async () => {
+      // arrange
+      const url = 'example.com'
+
+      // act
+      const result = await checkTLS(url)
+
+      // assert
+      expect(result).to.equal(null)
+    })
+
+    it('tests example.com with custom options', async () => {
+      // arrange
+      const domainDef = {
+        domain: 'example.com',
+        options: {
+          path: '/foo',
+        },
+      }
+
+      // act
+      const result = await checkTLS(domainDef)
+
+      // assert
+      expect(result).to.equal(null)
+    })
+  })
+})

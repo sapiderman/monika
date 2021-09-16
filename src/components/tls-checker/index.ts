@@ -22,11 +22,31 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { AxiosResponseWithExtraData } from '../../../interfaces/request'
+import sslChecker from 'ssl-checker'
 
-// Check if response status is not 2xx
-const statusNot2xx = (res: AxiosResponseWithExtraData) => {
-  return res.status < 200 || res.status >= 300
+type TLSHostArg = {
+  domain: string
+  options?: Record<string, any>
 }
+export async function checkTLS(
+  host: string | TLSHostArg,
+  expiryThreshold = 30
+) {
+  const hostOptions = (host as TLSHostArg)?.options ?? {}
+  const domain = (host as TLSHostArg)?.domain ?? (host as string)
 
-export default statusNot2xx
+  const { valid, validTo, daysRemaining } = await sslChecker(
+    domain,
+    hostOptions
+  )
+
+  if (!valid) {
+    throw new Error(`${domain} security certificate has expired at ${validTo}!`)
+  }
+
+  if (daysRemaining <= expiryThreshold) {
+    throw new Error(`${domain} security certificate will expire at ${validTo}!`)
+  }
+
+  return null
+}

@@ -23,23 +23,24 @@
  **********************************************************************************/
 
 import chai, { expect } from 'chai'
+
+import { sendAlerts } from '../../src/components/notification'
+import * as discord from '../../src/components/notification/channel/discord'
+import * as mailgun from '../../src/components/notification/channel/mailgun'
+import * as monikaNotif from '../../src/components/notification/channel/monika-notif'
+import * as slack from '../../src/components/notification/channel/slack'
+import * as smtp from '../../src/components/notification/channel/smtp'
+import * as telegram from '../../src/components/notification/channel/telegram'
+import * as webhook from '../../src/components/notification/channel/webhook'
+import * as whatsapp from '../../src/components/notification/channel/whatsapp'
 import {
   MailgunData,
+  MonikaNotifData,
   TelegramData,
   WebhookData,
   WhatsappData,
-  DiscordData,
-  MonikaNotifData,
 } from '../../src/interfaces/data'
-import * as mailgun from '../../src/components/notification/channel/mailgun'
-import * as webhook from '../../src/components/notification/channel/webhook'
-import * as slack from '../../src/components/notification/channel/slack'
-import * as smtp from '../../src/components/notification/channel/smtp'
-import * as whatsapp from '../../src/components/notification/channel/whatsapp'
-import * as telegram from '../../src/components/notification/channel/telegram'
-import * as discord from '../../src/components/notification/channel/discord'
-import * as monikaNotif from '../../src/components/notification/channel/monika-notif'
-import { sendAlerts } from '../../src/components/notification'
+import { AxiosResponseWithExtraData } from '../../src/interfaces/request'
 
 describe('send alerts', () => {
   afterEach(() => {
@@ -48,11 +49,19 @@ describe('send alerts', () => {
 
   it('should send UP alert', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: false,
-        responseValue: 200,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: false,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -66,19 +75,26 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'UP',
-      incidentThreshold: 3,
+      probeState: 'UP',
     })
-    expect(sent).to.have.length(1)
+    expect(mailgun.sendMailgun).to.have.been.called.exactly(1)
   })
 
   it('should send DOWN alert', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -92,19 +108,60 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
-    expect(sent).to.have.length(1)
+    expect(mailgun.sendMailgun).to.have.been.called.exactly(1)
   })
 
   it('should send mailgun notification', async () => {
     chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
+      },
+      notifications: [
+        {
+          id: 'one',
+          type: 'mailgun',
+          data: {
+            recipients: ['xx@xx'],
+            apiKey: 'xx',
+            domain: 'xxx',
+            username: 'xxxx',
+          },
+        },
+      ],
+      url: 'https://hyperjump.tech',
+      probeState: 'DOWN',
+    })
+    expect(mailgun.sendMailgun).to.have.been.called.exactly(1)
+  })
+
+  it('should send mailgun notification without username', async () => {
+    chai.spy.on(mailgun, 'sendMailgun', () => Promise.resolve())
+    await sendAlerts({
+      validation: {
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -118,22 +175,28 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
-    expect(mailgun.sendMailgun).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(mailgun.sendMailgun).to.have.been.called.exactly(1)
   })
 
   it('should send webhook & slack notifications', async () => {
     chai.spy.on(webhook, 'sendWebhook', () => Promise.resolve())
     chai.spy.on(slack, 'sendSlack', () => Promise.resolve())
 
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -152,22 +215,28 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
 
-    expect(webhook.sendWebhook).to.have.been.called()
-    expect(slack.sendSlack).to.have.been.called()
-    expect(sent).to.have.length(2)
+    expect(webhook.sendWebhook).to.have.been.called.exactly(1)
+    expect(slack.sendSlack).to.have.been.called.exactly(1)
   })
 
   it('should send SMTP notification', async () => {
     chai.spy.on(smtp, 'sendSmtpMail', () => Promise.resolve())
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -183,21 +252,27 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
-    expect(smtp.sendSmtpMail).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(smtp.sendSmtpMail).to.have.been.called.exactly(1)
   })
 
   it('should send whatsapp notifications', async () => {
     chai.spy.on(whatsapp, 'sendWhatsapp', () => Promise.resolve())
 
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -212,12 +287,10 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
 
-    expect(whatsapp.sendWhatsapp).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(whatsapp.sendWhatsapp).to.have.been.called.exactly(1)
   })
 
   it('should send whatsapp notifications', async () => {
@@ -235,17 +308,25 @@ describe('send alerts', () => {
     )
 
     expect(whatsapp.loginUser).to.have.been.called()
-    expect(whatsapp.sendTextMessage).to.have.been.called()
+    expect(whatsapp.sendTextMessage).to.have.been.called.exactly(1)
   })
 
   it('should send telegram notifications', async () => {
     chai.spy.on(telegram, 'sendTelegram', () => Promise.resolve())
 
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -254,29 +335,33 @@ describe('send alerts', () => {
           data: {
             group_id: '123',
             bot_token: '123',
-            body: {
-              url: 'https://hyperjump.tech',
-            },
+            body: `url: 'https://hyperjump.tech'`,
           } as TelegramData,
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
 
-    expect(telegram.sendTelegram).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(telegram.sendTelegram).to.have.been.called.exactly(1)
   })
 
   it('should send webhook discord', async () => {
     chai.spy.on(discord, 'sendDiscord', () => Promise.resolve())
 
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -284,26 +369,32 @@ describe('send alerts', () => {
           type: 'discord',
           data: {
             url: 'xx',
-          } as DiscordData,
+          } as WebhookData,
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
+      probeState: 'DOWN',
     })
 
-    expect(discord.sendDiscord).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(discord.sendDiscord).to.have.been.called.exactly(1)
   })
 
   it('should send webhook monika-notif', async () => {
     chai.spy.on(monikaNotif, 'sendMonikaNotif', () => Promise.resolve())
 
-    const sent = await sendAlerts({
+    await sendAlerts({
       validation: {
-        alert: 'status-not-2xx',
-        status: true,
-        responseValue: 500,
+        alert: { query: 'status-not-2xx', message: '' },
+        hasSomethingToReport: true,
+        response: {
+          status: 500,
+          config: {
+            extraData: {
+              responseTime: 0,
+            },
+          },
+          headers: {},
+        } as AxiosResponseWithExtraData,
       },
       notifications: [
         {
@@ -315,13 +406,9 @@ describe('send alerts', () => {
         },
       ],
       url: 'https://hyperjump.tech',
-      status: 'DOWN',
-      incidentThreshold: 3,
-      probeName: 'monika-notif test',
-      probeId: 'monika-notif 1',
+      probeState: 'DOWN',
     })
 
-    expect(monikaNotif.sendMonikaNotif).to.have.been.called()
-    expect(sent).to.have.length(1)
+    expect(monikaNotif.sendMonikaNotif).to.have.been.called.exactly(1)
   })
 })

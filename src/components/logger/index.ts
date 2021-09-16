@@ -24,34 +24,31 @@
 
 import chalk from 'chalk'
 import { AxiosResponseWithExtraData } from '../../interfaces/request'
-import { Probe } from '../../interfaces/probe'
+import { ProbeAlert, Probe } from '../../interfaces/probe'
 import { Notification } from '../../interfaces/notification'
 import { getAllLogs, saveProbeRequestLog } from './history'
 import { log } from '../../utils/pino'
 
 import { LogObject } from '../../interfaces/logs'
-import { getEventEmitter } from '../../utils/events'
-import { PROBE_LOGS_BUILT } from '../../constants/event-emitter'
 import { saveNotificationLog } from '../logger/history'
-
-const EventEmitter = getEventEmitter()
 
 /**
  * getStatusColor colorizes different statusCode
- * @param {number} statusCode is the httpStatus to colorize
+ * @param {any} responseCode is the httpStatus to colorize
  * @returns {string} color code based on chalk: Chalk & { supportsColor: ColorSupport };
  */
-export function getStatusColor(statusCode: number) {
-  switch (Math.trunc(statusCode / 100)) {
+export function getStatusColor(responseCode: number) {
+  switch (Math.trunc(responseCode / 100)) {
     case 2:
       return 'cyan'
     case 4:
       return 'orange'
-    case 5:
+    case 5: // all 5xx errrors
+    case 0: // 0 is uri not found
       return 'red'
-    default:
-      return 'white'
   }
+
+  return 'white'
 }
 
 /**
@@ -71,7 +68,7 @@ export function probeBuildLog({
   probe: Probe
   totalRequests: number
   probeRes: AxiosResponseWithExtraData
-  alerts?: string[]
+  alerts?: ProbeAlert[]
   error?: string
   mLog: LogObject
 }): LogObject {
@@ -83,24 +80,34 @@ export function probeBuildLog({
   mLog.responseCode = probeRes.status
   mLog.responseTime = probeRes.config.extraData?.responseTime ?? 0
 
-  if (alerts?.length) {
-    mLog.alert.flag = 'alert'
-    mLog.alert.message = alerts
+  // specific alerts/notif for http status codes
+  switch (mLog.responseCode) {
+    case 0:
+      mLog.alert.flag = 'alert'
+      mLog.alert.message.push('URI not found')
+      break
+    case 1:
+      mLog.alert.flag = 'alert'
+      mLog.alert.message = ['Connection reset']
+      break
+    case 2:
+      mLog.alert.flag = 'alert'
+      mLog.alert.message = ['Connection refused']
+      break
+    case 599:
+      mLog.alert.flag = 'alert'
+      mLog.alert.message.push('Request Timed out')
+      break
+    default:
   }
 
   if (error?.length) log.error('probe error: ', error)
-
-  for (const rq of probe.requests) {
-    if (rq?.saveBody !== true ?? undefined) {
-      probeRes.data = '' // if not saved, flush .data
-    }
-  }
 
   saveProbeRequestLog({
     probe,
     totalRequests,
     probeRes,
-    alerts,
+    alertQueries: (alerts || []).map((alert) => alert.query),
     error,
   })
 
@@ -116,14 +123,14 @@ export function probeBuildLog({
 export function setNotificationLog(
   {
     type,
-    alertMsg,
+    alertQuery,
     notification,
     probe,
   }: {
     probe: Probe
     notification: Notification
     type: 'NOTIFY-INCIDENT' | 'NOTIFY-RECOVER'
-    alertMsg: string
+    alertQuery: string
   },
   mLog: LogObject
 ): LogObject {
@@ -139,7 +146,7 @@ export function setNotificationLog(
 
   mLog.notification.flag = type
   mLog.notification.message[0] = msg
-  saveNotificationLog(probe, notification, type, alertMsg)
+  saveNotificationLog(probe, notification, type, alertQuery)
 
   return mLog
 }
@@ -161,7 +168,7 @@ export function setNotification(
   mLog: LogObject
 ): LogObject {
   mLog.notification.flag = flag
-  mLog.notification.message[0] = message
+  mLog.notification.message.push(message)
 
   return mLog
 }
@@ -171,7 +178,6 @@ export function setNotification(
  * @param {object} flag: type of alert message, ex: not-2xx
  * @param {LogObject} mLog is the log object being updated
  * @returns {LogObject} mLog returned again after being updated
- *
  */
 export function setAlert(
   {
@@ -184,7 +190,7 @@ export function setAlert(
   mLog: LogObject
 ): LogObject {
   mLog.alert.flag = flag
-  mLog.alert.message[0] = message
+  mLog.alert.message.push(message)
 
   return mLog
 }
@@ -210,7 +216,7 @@ export async function printAllLogs() {
   data.forEach((row) => {
     log.info({
       type: 'PLAIN',
-      msg: `${row.id} id: ${row.probe_id} status: ${chalk.keyword(
+      msg: `${row.id} id: ${row.probe_id} responseCode: ${chalk.keyword(
         getStatusColor(row.response_status)
       )(String(row.response_status))} - ${row.request_url}, ${
         row.response_time || '- '
@@ -218,8 +224,3 @@ export async function printAllLogs() {
     })
   })
 }
-
-// TODO: Handle event when probe logs has been built
-EventEmitter.on(PROBE_LOGS_BUILT, async () => {
-  // TODO: put saving to db in one spot
-})

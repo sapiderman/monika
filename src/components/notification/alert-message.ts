@@ -22,90 +22,158 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { parseAlertStringTime } from '../../plugins/validate-response/checkers'
+import { format } from 'date-fns'
+import * as Handlebars from 'handlebars'
+import { hostname } from 'os'
+import { NotificationMessage } from '../../interfaces/notification'
+import { AxiosResponseWithExtraData } from '../../interfaces/request'
+import { ProbeAlert } from '../../interfaces/probe'
+import {
+  getPublicIp,
+  publicIpAddress,
+  publicNetworkInfo,
+} from '../../utils/public-ip'
 
-export function getMessageForAlert({
+let monikaInstance = ''
+
+const getMonikaInstance = async (ipAddress: string) => {
+  await getPublicIp()
+  monikaInstance = `${hostname()} (${[publicIpAddress, ipAddress]
+    .filter(Boolean)
+    .join('/')})`
+
+  if (publicNetworkInfo) {
+    monikaInstance = `${publicNetworkInfo.city} - ${
+      publicNetworkInfo.isp
+    } (${publicIpAddress}) - ${hostname()} (${ipAddress})`
+  }
+}
+
+export async function getMessageForAlert({
   alert,
   url,
   ipAddress,
-  status,
-  incidentThreshold,
-  responseValue,
+  probeState, // state of the probed target
+  response,
 }: {
-  alert: string
+  alert: ProbeAlert
   url: string
   ipAddress: string
-  status: string
-  incidentThreshold: number
-  responseValue: number
-}): {
-  subject: string
-  body: string
-  expected: string
-} {
-  const getSubject = (url: string, status: string) => {
-    const statusAlert = `Target ${url} is not OK`
-    if (alert === 'status-not-2xx' && status === 'UP')
-      return `[RECOVERY] ${statusAlert}`
-    if (alert === 'status-not-2xx' && status === 'DOWN')
-      return `[INCIDENT] ${statusAlert}`
+  probeState: string
+  response: AxiosResponseWithExtraData
+}): Promise<NotificationMessage> {
+  const getSubject = (probeState: string) => {
+    const recoveryOrIncident = probeState === 'UP' ? 'Recovery' : 'Incident'
 
-    const responseAlert = `Target ${url} took too long to respond`
-    if (alert.includes('response-time-greater-than-') && status === 'UP')
-      return `[RECOVERY] ${responseAlert}`
-
-    return `[INCIDENT] ${responseAlert}`
+    return `New ${recoveryOrIncident} from Monika`
   }
 
-  const getBody = (status: string) => {
-    if (alert === 'status-not-2xx' && status === 'DOWN')
-      return `Target ${url} is not healthy. It has not been returning status code 2xx ${incidentThreshold} times in a row.`
+  const getExpectedMessage = (
+    alert: ProbeAlert,
+    response: AxiosResponseWithExtraData
+  ) => {
+    const { statusText, status } = response
+    const isHTTPStatusCode = status >= 100 && status <= 599
 
-    if (alert.includes('response-time-greater-than-') && status === 'DOWN') {
-      const alertTime = parseAlertStringTime(alert)
-      return `Target ${url} is not healthy. The response time has been greater than ${alertTime} ${incidentThreshold} times in a row`
-    }
+    if (!alert.message) return ''
 
-    return `Target ${url} is back to healthy.`
-  }
+    if (!isHTTPStatusCode) {
+      switch (status) {
+        case 0:
+          return 'URI not found'
+        case 1:
+          return 'Connection reset'
+        case 2:
+          return 'Connection refused'
 
-  const getExpectedMessage = (status: string, responseValue: number) => {
-    if (alert === 'status-not-2xx') {
-      if (status === 'DOWN') {
-        return `Status is ${responseValue}, was expecting 200.`
-      }
-
-      if (status === 'UP') {
-        return `Service is ok. Status now 200`
+        default:
+          return statusText
       }
     }
 
-    if (alert.includes('response-time-greater-than-')) {
-      const alertTime = parseAlertStringTime(alert)
-
-      if (status === 'DOWN') {
-        return `Response time is ${responseValue}ms expecting a ${alertTime}ms`
-      }
-
-      if (status === 'UP') {
-        return `Service is ok. Response now is within ${alertTime}ms`
-      }
-    }
-
-    return ''
+    return Handlebars.compile(alert.message)({
+      response: {
+        size: Number(response.headers['content-length']),
+        status,
+        time: response.config.extraData?.responseTime,
+        body: response.data,
+        headers: response.headers,
+      },
+    })
   }
 
-  const today = new Date().toUTCString()
+  const meta = {
+    type: probeState === 'UP' ? ('recovery' as const) : ('incident' as const),
+    url,
+    time: format(new Date(), 'yyyy-MM-dd HH:mm:ss XXX'),
+    hostname: hostname(),
+    privateIpAddress: ipAddress,
+    publicIpAddress,
+    monikaInstance,
+  }
+
+  if (monikaInstance.length === 0) {
+    await getMonikaInstance(ipAddress)
+  }
+
+  const bodyString = `Message: ${getExpectedMessage(alert, response)}
+
+URL: ${meta.url}
+
+Time: ${meta.time}
+
+From: ${monikaInstance}`
+
   const message = {
-    subject: getSubject(url, status),
-    body: `
-      ${getBody(status)}\n\n
-      Time: ${today}\n
-      Target URL: ${url}\n
-      From server: ${ipAddress}
-    `,
-    expected: getExpectedMessage(status, responseValue),
+    subject: getSubject(probeState),
+    body: bodyString,
+    summary: getExpectedMessage(alert, response),
+    meta,
   }
 
   return message
+}
+
+export const getMessageForStart = async (
+  hostname: string,
+  ip: string
+): Promise<NotificationMessage> => {
+  if (monikaInstance.length === 0) {
+    await getMonikaInstance(ip)
+  }
+
+  return {
+    subject: 'Monika is started',
+    body: `Monika is running from ${monikaInstance}`,
+    summary: `Monika is running from ${monikaInstance}`,
+    meta: {
+      type: 'start',
+      time: new Date().toUTCString(),
+      hostname: hostname,
+      privateIpAddress: ip,
+      publicIpAddress,
+    },
+  }
+}
+
+export const getMessageForTerminate = async (
+  hostname: string,
+  ip: string
+): Promise<NotificationMessage> => {
+  if (monikaInstance.length === 0) {
+    await getMonikaInstance(ip)
+  }
+
+  return {
+    subject: 'Monika terminated',
+    body: `Monika is no longer running from ${monikaInstance}`,
+    summary: `Monika is no longer running from ${monikaInstance}`,
+    meta: {
+      type: 'termination',
+      time: new Date().toUTCString(),
+      hostname: hostname,
+      privateIpAddress: ip,
+      publicIpAddress,
+    },
+  }
 }

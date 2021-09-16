@@ -34,11 +34,17 @@ chai.use(spies)
 
 describe('monika', () => {
   let getPublicIPStub: any
+  let getPublicNetworkInfoStub: any
   beforeEach(() => {
     getPublicIPStub = sinon.stub(IpUtil, 'getPublicIp' as never)
+    getPublicNetworkInfoStub = sinon.stub(
+      IpUtil,
+      'getPublicNetworkInfo' as never
+    )
   })
   afterEach(() => {
     getPublicIPStub.restore()
+    getPublicNetworkInfoStub.restore()
   })
 
   // General Test
@@ -171,11 +177,39 @@ describe('monika', () => {
       ])
     )
     .catch((error) => {
-      expect(error.message).to.contain(
-        "Probe alert should be 'status-not-2xx' or 'response-time-greater-than-<number>-(m)s"
-      )
+      expect(error.message).to.contain('Probe alert format is invalid!')
     })
     .it('runs with config with invalid probe request alert')
+
+  test
+    .stdout()
+    .do(() =>
+      cmd.run([
+        '--config',
+        resolve('./test/testConfigs/probes/stringProbeRequestAlert.json'),
+      ])
+    )
+    .it(
+      'runs with config with probe request alert in defined strings',
+      (ctx) => {
+        expect(ctx.stdout).to.contain('Starting Monika.')
+      }
+    )
+
+  test
+    .stdout()
+    .do(() =>
+      cmd.run([
+        '--config',
+        resolve('./test/testConfigs/probes/objectProbeRequestAlert.json'),
+      ])
+    )
+    .it(
+      'runs with config with probe request alert in object format with flexible query',
+      (ctx) => {
+        expect(ctx.stdout).to.contain('Starting Monika.')
+      }
+    )
 
   test
     .stdout()

@@ -24,54 +24,78 @@
 
 import { expect } from 'chai'
 import { AxiosResponseWithExtraData } from '../../../../interfaces/request'
-import statusNot2xx from '../status-not-2xx'
+import queryExpression from '../query-expression'
 
-describe('statusNot2xx', () => {
-  const generateMockedResponse = (status: number) => {
-    return {
-      status,
+describe('queryExpression', () => {
+  it('should handle response time query', () => {
+    const res = {
+      headers: {},
+      config: {
+        extraData: {
+          responseTime: 150,
+        },
+      },
     } as AxiosResponseWithExtraData
-  }
 
-  it('should handle when response status is 100', () => {
-    const res = generateMockedResponse(100)
-    const data = statusNot2xx(res)
+    const result = queryExpression(res, 'response.time > 1000')
 
-    expect(data).to.equals(true)
+    expect(result).to.be.false
   })
 
-  it('should handle when response status is 200', () => {
-    const res = generateMockedResponse(200)
-    const data = statusNot2xx(res)
+  it('should handle response status query', () => {
+    const res = {
+      status: 200,
+      headers: {},
+      config: {},
+    } as AxiosResponseWithExtraData
 
-    expect(data).to.equals(false)
+    const result = queryExpression(res, 'response.status != 200')
+
+    expect(result).to.be.false
   })
 
-  it('should handle when response status is 201', () => {
-    const res = generateMockedResponse(201)
-    const data = statusNot2xx(res)
+  it('should handle response size query', () => {
+    const res = {
+      status: 200,
+      headers: { 'content-length': 2000 },
+      config: {},
+    } as AxiosResponseWithExtraData
 
-    expect(data).to.equals(false)
+    const result = queryExpression(res, 'response.size < 1000')
+
+    expect(result).to.be.false
   })
 
-  it('should handle when response status is 300', () => {
-    const res = generateMockedResponse(300)
-    const data = statusNot2xx(res)
+  it('should handle response headers query', () => {
+    const res = {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+      config: {},
+    } as AxiosResponseWithExtraData
 
-    expect(data).to.equals(true)
+    const result = queryExpression(
+      res,
+      "response.headers['content-type'] != 'application/json'"
+    )
+
+    expect(result).to.be.false
   })
 
-  it('should handle when response status is 400', () => {
-    const res = generateMockedResponse(400)
-    const data = statusNot2xx(res)
+  it('should handle response body query', () => {
+    const res = {
+      status: 200,
+      headers: {},
+      config: {},
+      data: {
+        message: 'Hello',
+      },
+    } as AxiosResponseWithExtraData
 
-    expect(data).to.equals(true)
-  })
+    const result = queryExpression(
+      res,
+      "startsWith(response.body.message, 'Hello')"
+    )
 
-  it('should handle when response status is 500', () => {
-    const res = generateMockedResponse(500)
-    const data = statusNot2xx(res)
-
-    expect(data).to.equals(true)
+    expect(result).to.be.false
   })
 })

@@ -22,34 +22,8 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { expect } from 'chai'
-import { AxiosResponseWithExtraData } from '../../../../interfaces/request'
-import resTimeGreaterThanX from '../res-time-greater-than-x'
-
-describe('resTimeGreaterThanX', () => {
-  const generateMockedResponse = (responseTime: number) => {
-    return {
-      config: {
-        extraData: {
-          responseTime,
-        },
-      },
-    } as AxiosResponseWithExtraData
-  }
-
-  it('should handle when response time is greater than minimum response time', () => {
-    const minimumResponseTime = 2
-    const res = generateMockedResponse(5)
-    const data = resTimeGreaterThanX(res, minimumResponseTime)
-
-    expect(data).to.equals(true)
-  })
-
-  it('should handle when response time is less than minimum response time', () => {
-    const minimumResponseTime = 2
-    const res = generateMockedResponse(1)
-    const data = resTimeGreaterThanX(res, minimumResponseTime)
-
-    expect(data).to.equals(false)
-  })
-})
+export interface Certificate {
+  domains: string[]
+  // The reminder is the number of days to send notification to user before the domain expires.
+  reminder?: number
+}

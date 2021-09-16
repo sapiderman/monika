@@ -23,7 +23,7 @@
  **********************************************************************************/
 
 import { RequestConfig } from '../../interfaces/request'
-import { request } from './request'
+import { executeRequest } from './request'
 import { AxiosResponseWithExtraData } from '../../interfaces/request'
 import * as Handlebars from 'handlebars'
 
@@ -41,56 +41,82 @@ export async function probing(
     // Compile headers using handlebars to render URLs that uses previous responses data.
     // In some case such as value is not string, it will be returned as is without being compiled.
     // If the request does not have any headers, then it should skip this process.
-    let { headers } = requestConfig
-    if (headers) {
-      for await (const header of Object.keys(headers)) {
+    if (requestConfig.headers) {
+      for await (const header of Object.keys(requestConfig.headers)) {
         try {
-          const rawHeader = headers[header]
+          const rawHeader = requestConfig.headers[header]
           const renderHeader = Handlebars.compile(rawHeader)
           const renderedHeader = renderHeader({ responses })
 
-          headers = {
-            ...headers,
+          requestConfig.headers = {
+            ...requestConfig.headers,
             [header]: renderedHeader,
           }
-        } catch (_) {
-          headers = { ...headers }
-        }
+        } catch (_) {}
       }
     }
 
     // Do the request using compiled URL and compiled headers (if exists)
-    const res = await request({
+    const res = await executeRequest({
       ...requestConfig,
       url: renderedURL,
     })
     return res as AxiosResponseWithExtraData
   } catch (error) {
-    let errStatus
+    let errResponseCode
     let errData
     let errHdr
+    let errText
 
     if (error.response) {
-      // Axios doesn't always return error response
-      errStatus = error.response.status
+      // 400, 500 get here
+      errResponseCode = error.response.status
       errData = error.response.data
       errHdr = error.response.headers
+    } else if (error.request) {
+      // timeout is here, ECONNABORTED, ENOTFOUND
+      switch (error.code) {
+        case 'ECONNABORTED':
+          errResponseCode = 599 // https://httpstatuses.com/599
+          errText = 'TIMEDOUT'
+          break
+
+        case 'ENOTFOUND':
+          errResponseCode = 0 // not found, the abyss never returned a statusCode
+          errText = 'NOTFOUND' // assign some unique errResponseCode for decoding later.
+          break
+
+        case 'ECONNRESET':
+          errResponseCode = 1 // connection reset from target, assign some unique number responsecCode
+          errText = 'ECONNRESET'
+          break
+
+        case 'ECONNREFUSED':
+          errResponseCode = 2 // got rejected, again
+          errText = 'ECONNREFUSED'
+          break
+
+        default:
+          errResponseCode = error.code // just return the error code
+          errText = 'unknown error'
+      }
+      errData = ''
+      errHdr = ''
     } else {
-      errStatus = 500 // TODO: how to detect timeouts?
+      // other errors
+      errResponseCode = error.code
+      errText = 'unknown error'
       errData = ''
       errHdr = ''
     }
 
     return {
       data: errData,
-      status: errStatus,
-      statusText: 'ERROR',
+      status: errResponseCode,
+      statusText: errText,
       headers: errHdr,
-      config: '',
-      extraData: {
-        requestStartedAt: 0,
-        responseTime: 0,
-      },
+      config: error.config, // get the response from error.config instead of error.response.xxx as -
+      extraData: error.config.extraData, // the response data lives in the data.config space
     } as AxiosResponseWithExtraData
   }
 }

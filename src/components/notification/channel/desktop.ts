@@ -22,42 +22,70 @@
  * SOFTWARE.                                                                      *
  **********************************************************************************/
 
-import { notify } from 'node-notifier'
-import { DesktopData } from './../../../interfaces/data'
-import getIp from '../../../utils/ip'
-import { hostname } from 'os'
-import { publicIpAddress } from '../../../utils/public-ip'
+import { execSync, spawnSync } from 'child_process'
+import { type } from 'os'
 
-export const sendDesktop = async (data: DesktopData) => {
-  try {
-    if (data.body.status === 'INIT') {
-      notify({
-        title: 'Monika is running',
-        message: data.body.alert,
-      })
+interface NotifyData {
+  title: string
+  message: string
+}
 
-      return
+/**
+ * Escape a string for PowerShell.
+ * @param {string} str input string
+ * @return {string} escape single quote with another
+ */
+export const psEscape = (str: string) => {
+  let result = ''
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    if (ch.charCodeAt(0) === 39) {
+      // single quote, escape it with another single quote
+      result += ch
     }
+    result += ch
+  }
+  return result
+}
 
-    if (data.body.status === 'TERMINATE') {
-      notify({
-        title: 'Monika terminated',
-        message: data.body.alert,
-      })
+/**
+ * Send notification according to the operating system
+ * @param {NotifyData} data notification data
+ * @return {void}
+ */
+export const sendDesktop = (data: NotifyData) => {
+  const { title, message } = data
+  const operatingSystem = type()
 
-      return
-    }
+  // OSAScript for OS X
+  const osascript = `display notification "${message}" with title "Monika" subtitle "${title}"`
 
-    const notifType = data.body.status === 'UP' ? 'RECOVERY' : 'INCIDENT'
-    notify({
-      title: `New ${notifType} notification from Monika (${data.body.alert})`,
-      message: `${data.body.expected} for URL ${data.body.url} at ${
-        data.body.time
-      }.\rMonika: ${getIp()} (local), ${
-        publicIpAddress ? `${publicIpAddress} (public)` : ''
-      } ${hostname} (hostname)`,
-    })
-  } catch (error) {
-    throw error
+  // Powershell Script for Windows
+  const powershellScript = `
+  [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null;
+  $templateType = [Windows.UI.Notifications.ToastTemplateType]::ToastText02;
+  $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($templateType);
+  $template.SelectSingleNode("//text[@id=1]").InnerText = '${psEscape(title)}';
+  $template.SelectSingleNode("//text[@id=2]").InnerText = '${psEscape(
+    message
+  )}';
+  $toast = [Windows.UI.Notifications.ToastNotification]::new($template);
+  $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Monika');
+  $notifier.Show($toast);
+  `
+
+  switch (operatingSystem) {
+    case 'Linux':
+      spawnSync('notify-send', ['-a', 'Monika', title, message])
+      break
+    case 'Darwin':
+      spawnSync('osascript', ['-e', osascript])
+      break
+    case 'Windows NT':
+      execSync(powershellScript, { shell: 'powershell.exe' })
+      break
+    default:
+      // TODO: New operating system?
+      break
   }
 }
