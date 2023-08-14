@@ -37,7 +37,7 @@
     "copy-to-clipboard": "^3.3.1",
     "date-fns": "^2.16.1",
     "docsearch.js": "^2.6.3",
-    "fast-xml-parser": "^4.0.0-beta.7",
+    "fast-xml-parser": "^4.2.5",
     "framer-motion": "^1.11.1",
     "globby": "^11.0.1",
     "gray-matter": "^4.0.2",
