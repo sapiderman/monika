@@ -22,7 +22,7 @@
   "homepage": "https://github.com/hyperjumptech/monika#readme",
   "dependencies": {
     "@sendgrid/mail": "^7.4.2",
-    "axios": "^0.27.2",
+    "axios": "^1.6.0",
     "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
     "chai-spies": "^1.0.0",
