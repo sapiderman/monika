@@ -110,7 +110,7 @@
     "sqlite3": "^5.1.7",
     "ssl-checker": "2.0.7",
     "stun": "^2.1.0",
-    "undici": "6.6.2",
+    "undici": "6.21.1",
     "unzipper": "^0.10.11",
     "url-parse": "^1.5.10",
     "uuid": "9.0.1",
